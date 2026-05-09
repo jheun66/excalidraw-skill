@@ -10,7 +10,7 @@
 //   *.woff2    — every data:font/woff2 inlined in the bundle (Xiaolai chunks
 //                + per-script Excalifont/Cascadia/Nunito/etc. faces)
 
-import { readFile, writeFile, mkdir, copyFile, readdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, copyFile, readdir, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,18 +19,37 @@ const here = dirname(fileURLToPath(import.meta.url));
 const skillDir = resolve(here, "..");
 const fontsDir = join(skillDir, "fonts");
 const utilsDir = join(skillDir, "node_modules/@excalidraw/utils/dist/prod");
+const utilsPkgPath = join(skillDir, "node_modules/@excalidraw/utils/package.json");
 const bundlePath = join(utilsDir, "index.js");
 const ttfDir = join(utilsDir, "assets");
 
 const STAMP = join(fontsDir, ".extracted");
 
+async function utilsVersion() {
+  return JSON.parse(await readFile(utilsPkgPath, "utf8")).version;
+}
+
 export async function ensureFonts() {
-  if (existsSync(STAMP)) return fontsDir;
-  await extract();
+  const version = await utilsVersion();
+  if (existsSync(STAMP)) {
+    const stamp = await readFile(STAMP, "utf8");
+    if (stamp.includes(`version=${version}`)) return fontsDir;
+  }
+  await extract(version);
   return fontsDir;
 }
 
-async function extract() {
+async function clearFonts() {
+  if (!existsSync(fontsDir)) return;
+  for (const name of await readdir(fontsDir)) {
+    if (name.endsWith(".ttf") || name.endsWith(".woff2") || name === ".extracted") {
+      await unlink(join(fontsDir, name));
+    }
+  }
+}
+
+async function extract(version) {
+  await clearFonts();
   await mkdir(fontsDir, { recursive: true });
 
   let ttfCount = 0;
@@ -51,10 +70,10 @@ async function extract() {
     woff2Count++;
   }
 
-  await writeFile(STAMP, `ttf=${ttfCount} woff2=${woff2Count}\n`);
-  console.error(`extracted ${ttfCount} TTF + ${woff2Count} woff2 → ${fontsDir}`);
+  await writeFile(STAMP, `version=${version} ttf=${ttfCount} woff2=${woff2Count}\n`);
+  console.error(`extracted ${ttfCount} TTF + ${woff2Count} woff2 (utils@${version}) → ${fontsDir}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  await extract();
+  await extract(await utilsVersion());
 }
