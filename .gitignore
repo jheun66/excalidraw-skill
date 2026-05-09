@@ -11,6 +11,9 @@ yarn-error.log*
 test-output/
 *.png.tmp
 
+# Extracted font cache (regenerated on first render via scripts/extract-fonts.mjs)
+fonts/
+
 # OS
 .DS_Store
 Thumbs.db

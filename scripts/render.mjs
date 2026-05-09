@@ -10,6 +10,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { JSDOM } from "jsdom";
+import { ensureFonts } from "./extract-fonts.mjs";
 
 // -------- Step 1. DOM shim — exportToSvg uses browser APIs.
 const dom = new JSDOM("<!doctype html><html><head></head><body></body></html>", {
@@ -43,13 +44,23 @@ for (const key of shimKeys) {
   }
 }
 
-// FontFace + document.fonts stubs — JSDOM does not implement these APIs and
-// exportToSvg will throw on import without them. Stubs only; no font logic.
+// FontFace + document.fonts stubs — JSDOM does not implement these APIs.
+// @excalidraw/utils reads `unicodeRange` to build a glyph-range regex; if it
+// is undefined the export crashes inside getUnicodeRangeRegex. The browser
+// default per CSS Fonts spec is "U+0-10FFFF" — mirror that.
 class FontFaceStub {
-  constructor(family, source) {
+  constructor(family, source, descriptors = {}) {
     this.family = family;
     this.source = source;
+    this.unicodeRange = descriptors.unicodeRange ?? "U+0-10FFFF";
+    this.style = descriptors.style ?? "normal";
+    this.weight = descriptors.weight ?? "normal";
+    this.stretch = descriptors.stretch ?? "normal";
+    this.display = descriptors.display ?? "auto";
+    this.featureSettings = descriptors.featureSettings ?? "normal";
+    this.variant = descriptors.variant ?? "normal";
     this.status = "loaded";
+    this.loaded = Promise.resolve(this);
   }
   async load() {
     return this;
@@ -66,6 +77,8 @@ const fontFacesShim = {
   delete: (face) => fontSet.delete(face),
   has: (face) => fontSet.has(face),
   clear: () => fontSet.clear(),
+  check: () => true,
+  load: async () => Array.from(fontSet),
   ready: Promise.resolve(),
   status: "loaded",
   forEach: (cb) => fontSet.forEach(cb),
@@ -115,9 +128,18 @@ const svgString =
 await writeFile(svgPath, svgString);
 
 // -------- Step 6. SVG → PNG via resvg.
+// resvg ignores @font-face inside the SVG, so the woff2 data URLs that
+// @excalidraw/utils inlined would be discarded — text would fall back to
+// system fonts. Point resvg at the extracted font cache instead.
+const fontDir = await ensureFonts();
 const resvg = new Resvg(svgString, {
   fitTo: { mode: "zoom", value: 2 },
   background: appState.viewBackgroundColor,
+  font: {
+    fontDirs: [fontDir],
+    loadSystemFonts: false,
+    defaultFontFamily: "Excalifont",
+  },
 });
 const pngBuffer = resvg.render().asPng();
 await writeFile(pngPath, pngBuffer);
