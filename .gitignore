@@ -14,6 +14,9 @@ test-output/
 # Extracted font cache (regenerated on first render via scripts/extract-fonts.mjs)
 fonts/
 
+# Rendered PNGs in assets/ — only commit the .excalidraw source and .svg output
+assets/*.png
+
 # OS
 .DS_Store
 Thumbs.db

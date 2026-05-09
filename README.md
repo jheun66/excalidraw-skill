@@ -57,10 +57,9 @@ First run extracts the bundled Excalidraw fonts to a local `fonts/` cache (~45 M
 
 ## How it renders
 
-```
-.excalidraw  →  @excalidraw/utils.exportToSvg  →  SVG  →  @resvg/resvg-js  →  PNG
-                       (with jsdom shim)                  (with extracted fonts)
-```
+![Render pipeline](./assets/render-pipeline.svg)
+
+> *The diagram above was authored as `assets/render-pipeline.excalidraw` and rendered by this very skill — see [`assets/`](./assets/).*
 
 - **`@excalidraw/utils`** — Excalidraw's official export utility, run under a small jsdom shim.
 - **`@resvg/resvg-js`** — Rust-backed SVG → PNG. Fed the extracted font directory so handwriting and CJK glyphs survive into the raster output.
