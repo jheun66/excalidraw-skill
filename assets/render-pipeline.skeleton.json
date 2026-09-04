@@ -1,0 +1,157 @@
+{
+  "elements": [
+    {
+      "type": "rectangle",
+      "id": "skeleton",
+      "x": 0,
+      "y": 0,
+      "width": 210,
+      "height": 90,
+      "strokeColor": "#1971c2",
+      "backgroundColor": "#a5d8ff",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "diagram.skeleton\nshapes + relations"
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "build",
+      "x": 320,
+      "y": 0,
+      "width": 300,
+      "height": 90,
+      "strokeColor": "#5f3dc4",
+      "backgroundColor": "#d0bfff",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "build-scene.mjs\nExcalidraw skeleton API"
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "scene",
+      "x": 740,
+      "y": 0,
+      "width": 210,
+      "height": 90,
+      "strokeColor": "#2f9e44",
+      "backgroundColor": "#b2f2bb",
+      "strokeWidth": 3,
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": ".excalidraw\nthe deliverable"
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "editor",
+      "x": 740,
+      "y": 220,
+      "width": 210,
+      "height": 80,
+      "strokeColor": "#2f9e44",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "Excalidraw app\nedit · export"
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "render",
+      "x": 320,
+      "y": 220,
+      "width": 230,
+      "height": 80,
+      "strokeColor": "#e8590c",
+      "backgroundColor": "#ffd8a8",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "render.mjs\nSVG → PNG"
+      }
+    },
+    {
+      "type": "rectangle",
+      "id": "audit",
+      "x": 0,
+      "y": 220,
+      "width": 210,
+      "height": 80,
+      "strokeColor": "#e8590c",
+      "strokeStyle": "dashed",
+      "roundness": {
+        "type": 3
+      },
+      "label": {
+        "text": "look at the PNG\naudit only"
+      }
+    },
+    {
+      "type": "arrow",
+      "start": {
+        "id": "skeleton"
+      },
+      "end": {
+        "id": "build"
+      }
+    },
+    {
+      "type": "arrow",
+      "start": {
+        "id": "build"
+      },
+      "end": {
+        "id": "scene"
+      }
+    },
+    {
+      "type": "arrow",
+      "start": {
+        "id": "scene"
+      },
+      "end": {
+        "id": "editor"
+      }
+    },
+    {
+      "type": "arrow",
+      "start": {
+        "id": "scene"
+      },
+      "end": {
+        "id": "render"
+      },
+      "strokeStyle": "dashed"
+    },
+    {
+      "type": "arrow",
+      "start": {
+        "id": "render"
+      },
+      "end": {
+        "id": "audit"
+      },
+      "strokeStyle": "dashed"
+    },
+    {
+      "type": "arrow",
+      "start": {
+        "id": "audit"
+      },
+      "end": {
+        "id": "skeleton"
+      },
+      "strokeStyle": "dashed"
+    }
+  ]
+}

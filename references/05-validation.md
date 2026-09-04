@@ -1,78 +1,63 @@
 # 05 — Validation
 
-Most authoring bugs are easy to spot once the picture is rendered, but expensive to spot in JSON. This page is a pre-render checklist plus the small amount of arithmetic you cannot avoid.
+This page used to be a twelve-item field checklist. Most of it is gone, because `scripts/build-scene.mjs` now guarantees what it used to police. What is left is the part no library can check for you.
 
-## Pre-render checklist
+## What the pipeline already guarantees
 
-Before you call the renderer, scan the JSON against this list:
+Do not spend a review pass on any of these. On the skeleton path they cannot be wrong:
 
-- [ ] Every element has a unique `id`. Unique `seed`, `version`, `versionNonce` too (a counter is fine).
-- [ ] `elements` array is non-empty. (An empty file renders an empty viewport.)
-- [ ] No element has `width` or `height` of 0 unless it is an arrow / line.
-- [ ] Every shape with a label has a `boundElements` entry **and** a paired text element with the matching `containerId`. One direction without the other renders an empty box.
-- [ ] Every text element either has `containerId` set to a real shape's id, or has `containerId: null` and is positioned by `x`/`y`.
-- [ ] Every arrow's `points` starts with `[0, 0]`. The remaining points are deltas from the arrow's `(x, y)`.
-- [ ] Every arrow has `width` and `height` matching its `points` extent (formula below).
-- [ ] Every arrow with more than two points has `elbowed: true`, `roundness: null`, `roughness: 0`. Drop any one and you get a curve.
-- [ ] No `diamond` shapes carrying labels (use a colored rectangle instead — see `01-json-schema.md`).
-- [ ] All bound arrows reference shape ids that exist in the same scene.
-- [ ] No id is referenced by `containerId` or arrow bindings but missing from the elements array.
-- [ ] The shape's `boundElements` lists every text and arrow that points at it (not just text). Missing arrow entries cause subtle rendering glitches.
+- Unique `id`, `seed`, `version`, `versionNonce` on every element.
+- Fractional `index` present and consistent with array order.
+- Every label paired in both directions — the shape's `boundElements` and the text's `containerId`.
+- No dangling reference: `build-scene.mjs` refuses to write a file whose arrow names an id no skeleton declares, and prints which one.
+- Arrow `width` / `height` matching `points`. These are derived, not authored: `restore` recomputes them from `points` and overwrites whatever is in the file. You could write `0` or `9999` and get the same result.
+- Bound arrows referencing shapes that exist, with `focus` and `gap` set.
+- Labels fitting their containers. A fixed-size shape wraps its label and grows in height; a shape with no `width` sizes itself to its label. Clipping is not a failure mode here.
 
-## Arrow `width` / `height` formula
+## What the pipeline cannot check
 
-For an arrow with `points = [[0,0], [p1x, p1y], [p2x, p2y], …]`:
+These are judgement calls about the picture, and they are the whole reason to look at a render:
 
+- **Overlap.** Two unrelated shapes sitting on top of each other. Nesting is not overlap.
+- **Crossing arrows.** Legal, ugly, and usually a sign the layout order is wrong.
+- **Reading order.** Whether the path the diagram is arguing for is the one the eye takes first.
+- **Arrow direction.** A binding is valid in either direction; only you know which way the dependency runs.
+- **Density.** Boxes so close that the picture reads as a wall, or so far apart that the relationship stops being visible.
+- **The stripped-label test.** Peel every label off mentally. Does the geometry still carry the claim? See `SKILL.md`.
+
+## Bindings matter for editing, not for rendering
+
+Worth being precise about, because the reason changed when the deliverable changed.
+
+Strip every `startBinding` and `endBinding` from a scene and re-render: the SVG is byte-identical. Rendering reads `points`, and nothing else.
+
+But the deliverable is a `.excalidraw` file that a person opens and edits. The moment they drag a box, an unbound arrow stays behind while everything around it moves — and an arrow missing from the shape's `boundElements` does the same. Bindings are what make the file survive contact with its reader.
+
+This is also why `build-scene.mjs` runs `restore` before writing. `restore` is the same normalisation the editor applies on open; doing it up front means the file on disk already matches what the app will hold in memory, so opening it does not immediately show up as an unsaved change.
+
+## Two things the old checklist got wrong
+
+Both are worth knowing about because they still appear in older Excalidraw notes elsewhere.
+
+**The arrow extent formula.** `width = max(|x|)` over the points is wrong for a path that doubles back: for `[[0,0],[-100,0],[50,0]]` it gives 100, and the actual span is 150. It is also irrelevant — `restore` recomputes it either way. Measured:
+
+| written `width` | after `restore` |
+| --------------- | --------------- |
+| 100 (old formula) | 150 |
+| 150 (true span) | 150 |
+| 9999 | 150 |
+| 0 | 150 |
+
+**The "elbowed triple".** Setting `elbowed: true` with `roundness: null` and `roughness: 0` does not produce a right-angle path in a static file. Elbow routing happens in the editor during a drag; the file only stores the resulting `points`. A freshly built arrow with `elbowed: true` and no explicit path draws as a straight line. To get a corner, author `points` — see `02-drawing-api.md`.
+
+While correcting old lore: `diamond` shapes carry labels and bind arrows correctly. The advice to substitute a coloured rectangle was working around a hand-authoring problem that does not exist on this path.
+
+## Looking at a render
+
+The renderer is an audit instrument now, not the deliverable:
+
+```bash
+node scripts/render.mjs diagram.excalidraw   # → diagram.svg, diagram.png
 ```
-width  = max(|p1x|, |p2x|, …)
-height = max(|p1y|, |p2y|, …)
-```
 
-A few examples:
-
-| `points`                         | width | height |
-| -------------------------------- | ----- | ------ |
-| `[[0,0],[0,80]]`                 | 0     | 80     |
-| `[[0,0],[120,0]]`                | 120   | 0      |
-| `[[0,0],[0,40],[200,40]]`        | 200   | 40     |
-| `[[0,0],[60,0],[60,-180],[40,-180]]` | 60 | 180    |
-
-Wrong values do not raise an error — they just clip the visible arrow or leave whitespace beside it. Get this right or expect chase-the-arrow rounds.
-
-## Edge anchoring
-
-Arrows must originate on a shape's *edge*, not its center. Reuse the formulas from `04-layout-patterns.md`:
-
-```
-top    = (x + width/2, y)
-bottom = (x + width/2, y + height)
-left   = (x,           y + height/2)
-right  = (x + width,   y + height/2)
-```
-
-If you bind the arrow with `startBinding` / `endBinding` and a `fixedPoint`, Excalidraw recomputes the anchor automatically when the shape moves. Without bindings, you have to recompute by hand after every coordinate change.
-
-`fixedPoint` cheat sheet:
-
-| Position    | `fixedPoint` |
-| ----------- | ------------ |
-| Top-center  | `[0.5, 0]`   |
-| Bottom-center | `[0.5, 1]` |
-| Left-center | `[0, 0.5]`   |
-| Right-center | `[1, 0.5]`  |
-
-## Common rendering bugs and their JSON fix
-
-| Symptom                                          | Cause                                              | Fix                                                                 |
-| ------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------- |
-| Empty rectangle where the label should be        | Shape's `boundElements` missing the text entry     | Add `{ "type": "text", "id": "<text-id>" }` to `boundElements`      |
-| Label sits outside its shape                     | Text's `containerId` is wrong or null              | Set `containerId` to the shape's id, set `verticalAlign: "middle"`  |
-| Arrow visibly floats next to the source          | Arrow `(x,y)` is at the shape's center, not edge   | Recompute the source `(x,y)` using the edge formula                 |
-| Arrow renders as a curve instead of right angles | Missing `elbowed` / `roundness:null` / `roughness:0` | Add all three to the arrow                                          |
-| Half the arrow is invisible                      | `width` / `height` does not match `points`         | Recompute as `max(|points x|)`, `max(|points y|)`                   |
-| Inner shape covers the outer label               | Layered diagram with bound (centered) outer label  | Use a free-floating text on the outer shape (`containerId: null`)   |
-| Arrow lands on the wrong corner of the target    | Wrong `fixedPoint` in `endBinding`                 | Pick the matching edge from the cheat sheet above                   |
-
-## When in doubt, render and look
-
-Do not try to debug a diagram by reading JSON for more than a couple of minutes. Render the PNG, open it with the `Read` tool, and see what is actually wrong. Fix one issue, re-render, repeat. Five quick render passes beat one heroic JSON edit.
+Open the PNG with the `Read` tool. Everything in "what the pipeline cannot check" is obvious in the image within a second and invisible in JSON for ten minutes. Fix one thing, rebuild, look again.

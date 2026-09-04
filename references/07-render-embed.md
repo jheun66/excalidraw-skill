@@ -1,12 +1,16 @@
-# 07 — Render and embed
+# 07 — Build, render, embed
 
-The renderer is `scripts/render.mjs`, an in-house Node script. It produces the same SVG that the Excalidraw web app would, then converts that SVG to PNG locally — no headless browser, no external CLI.
+Two scripts, in order.
 
-Internally:
+`scripts/build-scene.mjs` turns a skeleton into the `.excalidraw` file — that file is the deliverable. See `02-drawing-api.md`.
 
-- `jsdom` provides a DOM shim (Excalidraw's `exportToSvg` calls a few browser APIs).
+`scripts/render.mjs` turns a `.excalidraw` file into SVG and PNG. **This is an audit instrument, not a product.** You render so you can look at what you built; the user gets the `.excalidraw`. If they want an image, Excalidraw exports one from the app, at whatever scale and background they want, with the scene embedded in it.
+
+Internally the renderer is a Node script with no browser:
+
+- `scripts/dom-shim.mjs` provides jsdom plus the handful of APIs Excalidraw's export path expects.
 - `@excalidraw/utils.exportToSvg` produces the SVG.
-- `@resvg/resvg-js` (Rust-backed) rasterizes the SVG to PNG.
+- `@resvg/resvg-js` (Rust-backed) rasterizes it to PNG at 2×, pointed at the extracted font cache so handwriting and CJK glyphs survive.
 
 ## Setup once
 
@@ -15,38 +19,29 @@ cd excalidraw-skill
 npm install
 ```
 
-Requires Node ≥ 20.19. No Python, no Playwright, no Chromium, no global CLI.
+Requires Node ≥ 20.19. `npm install` also runs `scripts/bundle-excalidraw.mjs`, which produces `scripts/.generated/excalidraw.mjs` (~13 MB, gitignored) — `build-scene.mjs` will not run without it. No Python, no Playwright, no Chromium, no global CLI.
 
-## Quick render
-
-Use the wrapper:
+## The loop
 
 ```bash
-./scripts/render.sh path/to/diagram.excalidraw
+node scripts/build-scene.mjs diagram.skeleton.json   # → diagram.excalidraw
+node scripts/render.mjs diagram.excalidraw           # → diagram.png, diagram.svg
 ```
 
-This produces `diagram.png` (scale 2×) and `diagram.svg` next to the source file.
+Then:
 
-For finer control (or when calling from your own Node process), invoke the script directly:
+1. Read the counts `build-scene.mjs` printed. Missing text elements or an unbound-arrow warning are structural problems; fix them before looking at the image.
+2. Open `diagram.png` with the `Read` tool.
+3. Run the four-line audit (see `SKILL.md` Step 5).
+4. If any category is `FAIL`, edit the **skeleton** — not the built file — and repeat.
 
-```bash
-node scripts/render.mjs path/to/diagram.excalidraw
-```
+Editing the `.excalidraw` directly is how the two drift apart. The skeleton is the source.
 
-## Render → look loop
-
-Skipping this loop is the single most common cause of bad diagrams. After every non-trivial JSON edit:
-
-1. `./scripts/render.sh diagram.excalidraw`
-2. Open the resulting `diagram.png` with the `Read` tool.
-3. Run the five-line audit (see `SKILL.md` Step 5).
-4. If any category is `FAIL`, fix the JSON and repeat.
-
-A 30-second JSON-to-image loop is far cheaper than a five-minute "I'm sure it's right" inspection.
+`./scripts/render.sh` remains as a thin wrapper around the renderer for one-off use on a file that has no skeleton.
 
 ## Embedding in Markdown
 
-Once the PNG looks right:
+When a doc needs a picture rather than an editable file:
 
 ```markdown
 ![Architecture overview](./diagrams/architecture.png)
@@ -54,24 +49,27 @@ Once the PNG looks right:
 
 Conventions that pay off:
 
-- Keep `.excalidraw` and `.png` as siblings in a `diagrams/` directory next to the doc that uses them.
-- Use the same base name for both (`overview.excalidraw` ↔ `overview.png`); the wrapper depends on this implicitly.
-- Re-render on every edit — committing only the PNG without re-rendering produces drift between source and image.
-
-If a doc embeds many diagrams, list them in a small index (`diagrams/INDEX.md`) so a future editor can find the source for each image.
+- Keep all three siblings in a `diagrams/` directory next to the doc: `overview.skeleton.json`, `overview.excalidraw`, `overview.png`.
+- Same base name for all three. The scripts assume it.
+- Rebuild and re-render on every edit. Committing a PNG without rebuilding is how the image stops matching the source.
+- Commit the skeleton and the `.excalidraw`. The PNG is regenerable; whether to commit it depends on whether your docs render from the repo.
 
 ## Troubleshooting
 
 | Symptom                                       | Likely cause                                          | Fix                                                                     |
 | --------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Cannot find module ./.generated/excalidraw.mjs` | Bundle step has not run                            | `npm install`, or `npm run build`                                       |
 | `Cannot find module @excalidraw/utils`        | `npm install` not yet run                             | `cd <skill dir> && npm install`                                         |
+| `error: arrow endpoints reference ids that no skeleton declares` | Typo in an arrow's `start`/`end`    | The message names the id — fix it in the skeleton                       |
+| `warning: N arrows are not bound at both ends` | An arrow endpoint is a bare coordinate, not a shape  | Give it `start`/`end` referencing shape ids, or accept that it will not follow them |
 | `Unsupported Node version` / parse errors     | Node < 20.19                                          | Upgrade Node (e.g. `nvm install 20.19`)                                 |
-| `ReferenceError: FontFace is not defined`     | Old `render.mjs` without the FontFace shim            | Pull the latest `scripts/render.mjs` — the shim is at the top           |
-| PNG looks blurry                              | Output too small for the embed context                | The script renders at 2× already; if you need more, edit the `fitTo` value in `render.mjs` |
-| Output written next to the input by surprise  | The script defaults to sibling `.png` / `.svg`        | Move or rename the input file before rendering                          |
+| PNG text shows as boxes / wrong font          | Stale font cache                                      | Delete `fonts/` and re-render; it re-extracts                           |
+| Korean renders in a system font, not handwriting | Text is not `fontFamily: 5`                        | Excalidraw chains to the Xiaolai CJK hand font only for Excalifont — see `01-json-schema.md` |
+| Label slightly wider than it needs to be      | Text measurement outside a browser is an estimate     | Expected — `build-scene.mjs` errs generous on purpose; nudge `width` if it matters |
+| PNG looks blurry                              | Output too small for the embed context                | Already 2×; raise the `fitTo` value in `render.mjs` if you need more    |
 
 ## References
 
 - `@excalidraw/utils` package — published alongside `@excalidraw/excalidraw`
 - `@resvg/resvg-js` — <https://github.com/yisibl/resvg-js>
-- Official Excalidraw export utilities (browser-side reference): <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/utils/export>
+- Official Excalidraw export utilities: <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/utils/export>

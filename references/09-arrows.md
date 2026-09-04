@@ -1,6 +1,6 @@
 # 09 — Arrows: a philosophy
 
-The implementation details of arrows live in `04-layout-patterns.md` (edge formulas) and `05-validation.md` (`points` / `width` / `height` arithmetic, `elbowed` triple). This page is the layer above — *when* to use arrows, *which* arrowhead, *which* stroke style, *what* color, and *what* path. The single rule that everything else descends from:
+Arrow geometry is produced for you — see `02-drawing-api.md`. This page is the layer above — *when* to use arrows, *which* arrowhead, *which* stroke style, *what* color, and *what* path. The single rule that everything else descends from:
 
 > **An arrow is a claim about causality. If a connection is not directional, it is not an arrow.**
 
@@ -87,25 +87,21 @@ Multi-rainbow coloring (every arrow a different hue) is the visual equivalent of
 Routing decisions:
 
 - **Straight diagonal**: when source and target are not aligned and there is no obstacle. The most honest path. Default.
-- **90° elbow** (`elbowed: true` + `roundness: null` + `roughness: 0`): when (a) you need to avoid an obstacle, (b) you have parallel arrows that would otherwise cross, or (c) the orthogonality itself carries meaning ("this path strictly travels along structural lanes").
+- **90° elbow** (authored `points` with an intermediate corner — *not* `elbowed: true`, which does nothing in a static file): when (a) you need to avoid an obstacle, (b) you have parallel arrows that would otherwise cross, or (c) the orthogonality itself carries meaning ("this path strictly travels along structural lanes").
 - **Curved / U-shaped**: only for self-calls (a method calls itself) or one-off return paths. Heavy. If two arrows in your diagram are curved, the diagram has a layout problem.
 
 Never elbow a path that could be straight. Elbows say "I went out of my way to avoid something" — when there is nothing to avoid, that signal is noise.
 
 ---
 
-## 6. Geometry — non-negotiables
+## 6. Geometry — what is left for you to get right
 
-The implementation details are in `05-validation.md`, but the *rules* are:
+Endpoints, extents and bindings are computed by `scripts/build-scene.mjs`: an arrow declared as `start`/`end` between two shapes lands on each outline, with the right `width`/`height` and both bindings. An arrow floating next to its source is not a failure mode on this path.
 
-- Start and end land on a shape's *edge* — never on the center coordinate. An arrow that visually floats next to its source is the most common rendering bug, and it is always a coordinate mistake, not a Skill bug.
-- An arrow's `width` / `height` equals the absolute extent of its `points`. Wrong values clip or stretch the arrow.
-- For elbow paths, all three of `elbowed: true`, `roundness: null`, `roughness: 0` must be present. Two of three renders a curve.
-- An arrow's *start point* must not overlap a different arrow's *end point label*, and vice versa. If they would, change which edge of the shape the arrow leaves from.
+Two rules survive, because they are about *choice*, not arithmetic:
 
-The last rule is the one most often missed. When an arrow leaves the same edge another arrow's label sits on, the result reads as visual noise even though the JSON is technically valid. The fix is almost always to leave from a *different edge* of the shape (left vs. right vs. bottom).
-
----
+- **An arrow's start must not collide with another arrow's end label**, and vice versa. Technically valid, visually noise. The fix is to move a *shape* so the two arrows approach from different sides — or, if the layout is right and only one path is wrong, override that one arrow with explicit `points`.
+- **Elbow only to avoid something.** A right angle in the file means authoring the corner yourself (`02-drawing-api.md`). `elbowed: true` on its own draws a straight line — the editor computes elbow routes during a drag and the file only stores the result.
 
 ## 7. Width as emphasis
 
@@ -148,7 +144,7 @@ For arrows that arrive at the same edge of one target, the same staggering logic
 
 | What                          | Where                                |
 | ----------------------------- | ------------------------------------ |
-| Edge formulas, `fixedPoint`   | `04-layout-patterns.md` §"Edge formulas" |
-| `points` / `width` / `height` | `05-validation.md` §"Arrow `width`/`height` formula" |
+| Declaring an arrow, authored `points` | `02-drawing-api.md` §"Arrows" |
+| What the build step guarantees | `05-validation.md` §"What the pipeline already guarantees" |
 | Per-category arrow vocabulary | `08-diagram-types.md` (sync/async/return tables in §7, transition labels in §8, etc.) |
 | Color palette                 | `03-color-palette.md`                |

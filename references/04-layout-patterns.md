@@ -1,12 +1,14 @@
 # 04 — Layout patterns
 
-A diagram only "argues" if its layout matches the relationship being drawn. This page collects the layouts this skill reaches for the most, with coordinate templates you can lift into a JSON file.
+A diagram only "argues" if its layout matches the relationship being drawn. This page collects the layouts this skill reaches for the most, with coordinate templates you can lift into a skeleton (`02-drawing-api.md`).
 
 The coordinate model is straightforward: `x`, `y` is the top-left corner of a shape, `width` / `height` extend right and down. Origin is at the top-left of the canvas. All edge formulas in this page use that convention.
 
-## Edge formulas
+## Coordinates are the only thing you place
 
-Reused throughout. Given a shape `(x, y, width, height)`:
+Arrows are not your job. Write `{ "type": "arrow", "start": { "id": "a" }, "end": { "id": "b" } }` and `scripts/build-scene.mjs` runs the line between the two shapes, clipping it where it leaves each outline — a rectangle's side, a diamond's slant, an ellipse's curve — and backing off a small gap. What follows is therefore about *where the boxes go*, which is the part that carries the argument anyway.
+
+The formulas below are here only for the case where you override the path with explicit `points` (see `02-drawing-api.md`). Given a shape `(x, y, width, height)`:
 
 | Edge          | Point                          |
 | ------------- | ------------------------------ |
@@ -14,8 +16,6 @@ Reused throughout. Given a shape `(x, y, width, height)`:
 | Bottom center | `(x + width/2, y + height)`    |
 | Left center   | `(x, y + height/2)`            |
 | Right center  | `(x + width, y + height/2)`    |
-
-Use these whenever an arrow starts or ends — never aim at a shape's center coordinate, the arrow will visibly land "inside" the box.
 
 ## Pattern 1 — Vertical pipeline
 

@@ -9,88 +9,11 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { JSDOM } from "jsdom";
 import { ensureFonts } from "./extract-fonts.mjs";
 
 // -------- Step 1. DOM shim — exportToSvg uses browser APIs.
-const dom = new JSDOM("<!doctype html><html><head></head><body></body></html>", {
-  pretendToBeVisual: true,
-});
-const { window } = dom;
-const shimKeys = [
-  "window",
-  "document",
-  "navigator",
-  "HTMLElement",
-  "HTMLImageElement",
-  "Element",
-  "Node",
-  "DocumentFragment",
-  "SVGElement",
-  "Image",
-  "DOMParser",
-  "XMLSerializer",
-  "getComputedStyle",
-  "requestAnimationFrame",
-  "cancelAnimationFrame",
-  "devicePixelRatio",
-  "location",
-  "matchMedia",
-  "performance",
-];
-for (const key of shimKeys) {
-  if (window[key] !== undefined && globalThis[key] === undefined) {
-    globalThis[key] = window[key];
-  }
-}
-
-// FontFace + document.fonts stubs — JSDOM does not implement these APIs.
-// @excalidraw/utils reads `unicodeRange` to build a glyph-range regex; if it
-// is undefined the export crashes inside getUnicodeRangeRegex. The browser
-// default per CSS Fonts spec is "U+0-10FFFF" — mirror that.
-class FontFaceStub {
-  constructor(family, source, descriptors = {}) {
-    this.family = family;
-    this.source = source;
-    this.unicodeRange = descriptors.unicodeRange ?? "U+0-10FFFF";
-    this.style = descriptors.style ?? "normal";
-    this.weight = descriptors.weight ?? "normal";
-    this.stretch = descriptors.stretch ?? "normal";
-    this.display = descriptors.display ?? "auto";
-    this.featureSettings = descriptors.featureSettings ?? "normal";
-    this.variant = descriptors.variant ?? "normal";
-    this.status = "loaded";
-    this.loaded = Promise.resolve(this);
-  }
-  async load() {
-    return this;
-  }
-}
-if (globalThis.FontFace === undefined) globalThis.FontFace = FontFaceStub;
-
-const fontSet = new Set();
-const fontFacesShim = {
-  add: (face) => {
-    fontSet.add(face);
-    return fontFacesShim;
-  },
-  delete: (face) => fontSet.delete(face),
-  has: (face) => fontSet.has(face),
-  clear: () => fontSet.clear(),
-  check: () => true,
-  load: async () => Array.from(fontSet),
-  ready: Promise.resolve(),
-  status: "loaded",
-  forEach: (cb) => fontSet.forEach(cb),
-  [Symbol.iterator]: () => fontSet[Symbol.iterator](),
-  get size() {
-    return fontSet.size;
-  },
-};
-Object.defineProperty(globalThis.document, "fonts", {
-  value: fontFacesShim,
-  configurable: true,
-});
+// Shared with scripts/build-scene.mjs; see scripts/dom-shim.mjs.
+import { window } from "./dom-shim.mjs";
 
 // -------- Step 2. Dynamic import after shim is ready.
 const { exportToSvg } = await import("@excalidraw/utils");
